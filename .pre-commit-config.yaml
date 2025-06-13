@@ -1,0 +1,37 @@
+# Pre-commit hooks configuration for TopstepQuant
+# Install with `pre-commit install` and run on-demand via `pre-commit run --all-files`
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0  # using a stable tag of pre-commit-hooks
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml        # ensure YAML files are valid
+      - id: check-added-large-files
+
+  - repo: https://github.com/psf/black
+    rev: 25.1.0  # match version in pyproject.toml
+    hooks:
+      - id: black
+        args: [--fast]  # use --fast (no lengthy sanity checks) for speed in pre-commit
+
+  - repo: https://github.com/charliermarsh/ruff-pre-commit
+    rev: v0.10.0
+    hooks:
+      - id: ruff
+        args: [--fix]    # auto-fix simple lint issues (import sorting, etc.)
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.15.0
+    hooks:
+      - id: mypy
+        args: [--ignore-missing-imports]  # ignore imports without type hints (external libs)
+
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.8.3
+    hooks:
+      - id: bandit
+        args: [-c .bandit]  # optional: use a Bandit config file if provided
+
+# Note: The versions (rev) above correspond to specific tags/commits for stability.
+# `ruff-pre-commit` provides the Ruff hook; Bandit uses its own repo as hook source.

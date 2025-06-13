@@ -1,0 +1,91 @@
+# topstep_quant/config/schema.json
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "title": "Topstep Quant Config Schema",
+    "description": "Schema to validate the topstep_quant YAML configuration structure.",
+    "properties": {
+        "topstep": {
+            "type": "object",
+            "description": "Topstep Express Funded Account credentials and settings",
+            "properties": {
+                "account_type": {
+                    "type": "string",
+                    "description": "Type of Topstep account (e.g., Express 50K)"
+                },
+                "username": {
+                    "type": "string",
+                    "description": "Topstep account username"
+                },
+                "password": {
+                    "type": "string",
+                    "description": "Topstep account password"
+                }
+            },
+            "required": ["account_type", "username", "password"],
+            "additionalProperties": false
+        },
+        "risk": {
+            "type": "object",
+            "description": "Risk management settings for trading",
+            "properties": {
+                "max_daily_loss": {
+                    "type": "number",
+                    "description": "Maximum allowable daily loss in USD"
+                },
+                "max_total_drawdown": {
+                    "type": "number",
+                    "description": "Maximum allowable trailing drawdown in USD"
+                },
+                "max_position_size": {
+                    "type": "integer",
+                    "description": "Maximum number of contracts open at once"
+                },
+                "trade_limit_per_day": {
+                    "type": "integer",
+                    "description": "Maximum trades allowed per day"
+                },
+                "trade_limit_per_week": {
+                    "type": "integer",
+                    "description": "Maximum trades allowed per week"
+                },
+                "allowed_markets": {
+                    "type": "array",
+                    "description": "List of allowed trading symbols/markets",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            },
+            "required": ["max_daily_loss", "max_total_drawdown", "max_position_size", "trade_limit_per_day", "trade_limit_per_week", "allowed_markets"],
+            "additionalProperties": false
+        },
+        "strategies": {
+            "type": "array",
+            "description": "List of strategy sleeves and their settings",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Name of the strategy"
+                    },
+                    "enabled": {
+                        "type": "boolean",
+                        "description": "Whether the strategy is enabled"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Description of the strategy"
+                    }
+                },
+                "required": ["name", "enabled", "description"],
+                "additionalProperties": false
+            },
+            "minItems": 1,
+            "additionalItems": false
+        }
+    },
+    "required": ["topstep", "risk", "strategies"],
+    "additionalProperties": false
+}

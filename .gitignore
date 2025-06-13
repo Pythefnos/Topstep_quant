@@ -1,0 +1,36 @@
+# Python bytecode and metadata
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+
+# Virtual environment (Poetry can create .venv locally)
+.venv/
+venv/
+.env                 # environment variable definitions (if any)
+*.env
+
+# Distribution / build artifacts
+dist/
+build/
+*.egg-info/
+
+# Logs and caches
+*.log
+.logs/
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Jupyter notebooks checkpoints (if any are added in future)
+.ipynb_checkpoints/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# IDE/project files
+.vscode/
+.idea/

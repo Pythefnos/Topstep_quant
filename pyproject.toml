@@ -1,0 +1,39 @@
+**topstep_quant/pyproject.toml**  
+```toml
+# TopstepQuant project configuration (PEP 621 / Poetry)
+[project]
+name = "topstep-quant"
+version = "0.1.0"
+description = "Autonomous trading bot for CME micro-futures in a Topstep 50K account, with strict risk controls."
+authors = [
+  { name = "Your Name", email = "[email protected]" }
+]
+readme = "README.md"
+license = "MIT"
+keywords = ["trading", "algorithmic-trading", "futures", "topstep", "quant"]
+homepage = "https://github.com/yourusername/topstep_quant"
+requires-python = ">=3.11"
+
+# Primary runtime dependencies (for the trading bot and metrics)
+dependencies = [
+  "numpy>=2.3.0,<3.0",            # numerical computing for strategy calculations
+  "pandas>=2.3.0,<2.4",          # data handling, time-series analysis
+  "requests>=2.32.4,<2.33",      # HTTP requests (for any REST API calls, if needed)
+  "prometheus-client>=0.22.1,<0.23",  # Prometheus metrics exporter
+]
+
+# Group development dependencies under 'dev' (linters, formatters, tests, etc.)
+[tool.poetry.group.dev.dependencies]
+pre-commit = "4.2.0"    # pre-commit framework to run hooks
+ruff = "0.10.0"         # Ruff linter for Python (fast, includes flake8/pylint rules)
+black = "25.1.0"        # Black code formatter (2025 stable release)
+mypy = "1.15.0"         # Mypy static type checker
+bandit = "1.8.3"        # Bandit security analyzer for Python code
+pytest = "8.4.0"        # Pytest framework for unit testing
+
+# Optional: include type stub packages for improved typing (if needed)
+# types-requests = "2.31.0"  # e.g., typing stubs for requests library
+
+[tool.poetry.scripts]
+# Define a console script entry point for running the bot (calls main() in bot module)
+topstep-quant = "topstep_quant.bot:main"

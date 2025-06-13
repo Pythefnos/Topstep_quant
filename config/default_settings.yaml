@@ -1,0 +1,23 @@
+# topstep_quant/config/default_settings.yaml
+# Topstep account credentials and settings
+topstep:
+  # Topstep Express Funded Account credentials (example placeholders)
+  account_type: "Express 50K"  # Type of account (e.g., Express 50K, etc.)
+  username: "YOUR_TOPSTEP_USERNAME"
+  password: "YOUR_TOPSTEP_PASSWORD"
+# Risk management settings to abide by Topstep rules and personal risk tolerance
+risk:
+  max_daily_loss: 1000        # Maximum allowable daily loss in USD
+  max_total_drawdown: 2000    # Maximum allowable trailing drawdown in USD
+  max_position_size: 5        # Maximum number of contracts open at once
+  trade_limit_per_day: 10     # Max trades allowed per day
+  trade_limit_per_week: 50    # Max trades allowed per week
+  allowed_markets: ["ES", "NQ", "YM"]  # Allowed trading symbols/markets
+# Enabled trading strategy sleeves (multiple strategies can run concurrently)
+strategies:
+  - name: "MomentumScalper"
+    enabled: true
+    description: "Scalping strategy focusing on momentum bursts"
+  - name: "MeanReversion"
+    enabled: false
+    description: "Mean reversion strategy (currently disabled)"
