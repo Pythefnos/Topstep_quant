@@ -1,10 +1,8 @@
 """Configuration for Topstep Quant trading system.
 
 Defines risk parameters and session timing. The default values correspond to a Topstep
-50K Combine account: daily loss limit $1,000:contentReference[oaicite:15]{index=15} and trailing drawdown $2,000:contentReference[oaicite:16]{index=16}.
-Session times default to closing positions by 3:55 PM CT (Topstep requires flat by 3:10 PM CT):contentReference[oaicite:17]{index=17} 
-and resuming trading at 5:00 PM CT the same day:contentReference[oaicite:18]{index=18}.
-Credentials for broker APIs can be provided here or via environment variables. 
+50K Combine account: daily loss limit $1,000 and trailing drawdown $2,000.
+Session times default to closing positions by 3:55 PM CT and resuming trading at 5:00 PM CT.
 """
 from dataclasses import dataclass, field
 from datetime import time
@@ -20,8 +18,8 @@ class TradingConfig:
     daily_loss_limit: float = 1000.0  # Hard daily loss limit in USD (max loss per day)
     trailing_drawdown: float = 2000.0  # Trailing max drawdown in USD (from initial balance)
     initial_balance: float = 50000.0  # Initial account balance (for dummy or if needed for reference)
-    flatten_time: time = time(15, 55, tzinfo=TRADING_TIMEZONE)  # Daily auto-flatten time (CT)
-    session_start: time = time(17, 0, tzinfo=TRADING_TIMEZONE)  # Trading session start time (CT, usually 5:00 PM)
+    flatten_time: time = field(default_factory=lambda: time(15, 55, tzinfo=TRADING_TIMEZONE))  # Daily auto-flatten time (CT)
+    session_start: time = field(default_factory=lambda: time(17, 0, tzinfo=TRADING_TIMEZONE))  # Trading session start time (CT, usually 5:00 PM)
     broker_type: str = "dummy"  # Which broker backend to use: "tradovate", "rithmic", or "dummy"
     # Optional broker credentials and settings
     tradovate_username: Optional[str] = None
@@ -33,7 +31,8 @@ class TradingConfig:
     rithmic_server: Optional[str] = None  # e.g., "demo" or specific server name
     extra_settings: Dict[str, str] = field(default_factory=dict)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
+        """Validate and normalize configuration after initialization."""
         # Validate times have timezone for consistency
         if self.flatten_time.tzinfo is None:
             self.flatten_time = self.flatten_time.replace(tzinfo=TRADING_TIMEZONE)

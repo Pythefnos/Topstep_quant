@@ -1,119 +1,105 @@
-# File: tests/unit/test_coordinator.py
+"""Test execution coordinator functionality."""
 
 import pytest
-import time
-import logging
-from unittest.mock import MagicMock, call
-from topstepquant.coordinator import Coordinator
-from tests.conftest import TradeSignal
+from unittest.mock import MagicMock, patch
+from datetime import datetime, time
 
-def test_coordinator_executes_valid_signal(monkeypatch):
-    """Coordinator should call strategy, pass signal through risk, and execute via broker when allowed."""
-    # Set up mocks for strategy, risk manager, and broker
-    strategy = MagicMock()
-    signal = TradeSignal("ES", "BUY", 1)
-    strategy.generate_signals.return_value = [signal]
-    risk_manager = MagicMock()
-    risk_manager.validate_signal.return_value = True
-    broker = MagicMock()
-    broker.execute_order.return_value = "OK"
+from topstep_quant.execution.coordinator import ExecutionCoordinator
+from topstep_quant.infrastructure.config import TradingConfig
+from topstep_quant.infrastructure.dummy_broker import DummyBroker
 
-    coordinator = Coordinator(strategies=[strategy], risk_manager=risk_manager, broker=broker)
-    # Monkeypatch time.sleep to break out after one loop iteration
-    monkeypatch.setattr(time, "sleep", lambda t: (_ for _ in ()).throw(StopIteration()))
-    # Run one iteration of the coordinator loop (StopIteration breaks after first iteration)
-    with pytest.raises(StopIteration):
-        coordinator.run()
 
-    # Verify that each component was called correctly
-    strategy.generate_signals.assert_called_once()
-    risk_manager.validate_signal.assert_called_once_with(signal)
-    broker.execute_order.assert_called_once_with(signal)
+def test_coordinator_initialization():
+    """Test ExecutionCoordinator initialization."""
+    broker = DummyBroker()
+    config = TradingConfig()
+    
+    coordinator = ExecutionCoordinator(broker, config)
+    
+    assert coordinator.broker is broker
+    assert coordinator.config is config
+    assert coordinator.daily_loss_limit == 1000.0
+    assert coordinator.trailing_drawdown == 2000.0
 
-def test_coordinator_skips_no_signal(monkeypatch):
-    """Coordinator should not call risk manager or broker if a strategy returns no signals."""
-    strategy = MagicMock()
-    strategy.generate_signals.return_value = []  # no signals generated
-    risk_manager = MagicMock()
-    broker = MagicMock()
 
-    coordinator = Coordinator(strategies=[strategy], risk_manager=risk_manager, broker=broker)
-    monkeypatch.setattr(time, "sleep", lambda t: (_ for _ in ()).throw(StopIteration()))
-    with pytest.raises(StopIteration):
-        coordinator.run()
+def test_start_new_session():
+    """Test starting a new trading session."""
+    broker = DummyBroker(initial_balance=50000.0)
+    broker.connect()
+    config = TradingConfig()
+    
+    coordinator = ExecutionCoordinator(broker, config)
+    coordinator.start_new_session()
+    
+    assert coordinator.day_start_balance == 50000.0
+    assert coordinator.initial_balance == 50000.0
+    assert not coordinator.daily_locked
+    assert not coordinator.account_closed
 
-    # Strategy runs, but no signals mean risk and broker should not be called
-    strategy.generate_signals.assert_called_once()
-    risk_manager.validate_signal.assert_not_called()
-    broker.execute_order.assert_not_called()
 
-def test_coordinator_blocks_disallowed_signal(monkeypatch):
-    """Coordinator should not execute a trade if the risk manager disallows it."""
-    strategy = MagicMock()
-    signal = TradeSignal("ES", "BUY", 1)
-    strategy.generate_signals.return_value = [signal]
-    risk_manager = MagicMock()
-    risk_manager.validate_signal.return_value = False  # risk check fails
-    broker = MagicMock()
+def test_execute_order_success():
+    """Test successful order execution."""
+    broker = DummyBroker(initial_balance=50000.0)
+    broker.connect()
+    config = TradingConfig()
+    
+    coordinator = ExecutionCoordinator(broker, config)
+    coordinator.start_new_session()
+    
+    # Update market price for the instrument
+    broker.update_market_price("MES", 4500.0)
+    
+    order_id = coordinator.execute_order("MES", "BUY", 1, "MARKET", price=4500.0)
+    
+    assert order_id is not None
+    positions = broker.get_open_positions()
+    assert len(positions) == 1
+    assert positions[0].quantity == 1
 
-    coordinator = Coordinator(strategies=[strategy], risk_manager=risk_manager, broker=broker)
-    monkeypatch.setattr(time, "sleep", lambda t: (_ for _ in ()).throw(StopIteration()))
-    with pytest.raises(StopIteration):
-        coordinator.run()
 
-    strategy.generate_signals.assert_called_once()
-    risk_manager.validate_signal.assert_called_once_with(signal)
-    # Broker should never be called since risk did not approve the trade
-    broker.execute_order.assert_not_called()
+def test_execute_order_when_not_allowed():
+    """Test order execution when trading is not allowed."""
+    broker = DummyBroker()
+    config = TradingConfig()
+    
+    coordinator = ExecutionCoordinator(broker, config)
+    # Don't start session, so trading should not be allowed
+    
+    with pytest.raises(RuntimeError, match="Trading session not started"):
+        coordinator.execute_order("MES", "BUY", 1, "MARKET")
 
-def test_coordinator_handles_broker_exception(monkeypatch, caplog):
-    """Coordinator should handle broker exceptions without crashing and log an error."""
-    strategy = MagicMock()
-    signal = TradeSignal("ES", "BUY", 1)
-    strategy.generate_signals.return_value = [signal]
-    risk_manager = MagicMock()
-    risk_manager.validate_signal.return_value = True
-    broker = MagicMock()
-    broker.execute_order.side_effect = Exception("Network error")
 
-    coordinator = Coordinator(strategies=[strategy], risk_manager=risk_manager, broker=broker)
-    monkeypatch.setattr(time, "sleep", lambda t: (_ for _ in ()).throw(StopIteration()))
-    caplog.set_level(logging.ERROR)
-    # Run the coordinator loop; it should catch the broker exception and continue
-    with pytest.raises(StopIteration):
-        coordinator.run()
+@patch('topstep_quant.execution.coordinator.datetime')
+def test_is_trading_allowed_time_check(mock_datetime):
+    """Test trading allowed based on time."""
+    # Mock current time to be within trading hours
+    mock_now = MagicMock()
+    mock_now.time.return_value = time(14, 0)  # 2:00 PM CT
+    mock_datetime.now.return_value = mock_now
+    
+    broker = DummyBroker(initial_balance=50000.0)
+    broker.connect()
+    config = TradingConfig()
+    
+    coordinator = ExecutionCoordinator(broker, config)
+    coordinator.start_new_session()
+    
+    assert coordinator.is_trading_allowed()
 
-    # Broker was called once and raised an exception (caught internally)
-    strategy.generate_signals.assert_called_once()
-    risk_manager.validate_signal.assert_called_once_with(signal)
-    broker.execute_order.assert_called_once_with(signal)
-    # Coordinator should log an error about the broker failure
-    error_logs = [rec.getMessage() for rec in caplog.records if rec.levelname == "ERROR"]
-    error_logged = any("Network error" in msg or "broker" in msg.lower() for msg in error_logs)
-    assert error_logged, "Coordinator should log an error when broker execution fails"
 
-def test_coordinator_multiple_strategies(monkeypatch):
-    """Coordinator should handle multiple strategies, executing all allowed signals in order."""
-    # Two strategies producing different signals
-    strategy1 = MagicMock()
-    strategy2 = MagicMock()
-    sig1 = TradeSignal("ES", "BUY", 1)
-    sig2 = TradeSignal("NQ", "SELL", 2)
-    strategy1.generate_signals.return_value = [sig1]
-    strategy2.generate_signals.return_value = [sig2]
-    risk_manager = MagicMock()
-    risk_manager.validate_signal.return_value = True  # allow all trades
-    broker = MagicMock()
-
-    coordinator = Coordinator(strategies=[strategy1, strategy2], risk_manager=risk_manager, broker=broker)
-    monkeypatch.setattr(time, "sleep", lambda t: (_ for _ in ()).throw(StopIteration()))
-    with pytest.raises(StopIteration):
-        coordinator.run()
-
-    # Each strategy should be called once
-    strategy1.generate_signals.assert_called_once()
-    strategy2.generate_signals.assert_called_once()
-    # Risk manager should be called for each signal in sequence
-    risk_manager.validate_signal.assert_has_calls([call(sig1), call(sig2)], any_order=False)
-    # Broker should execute both orders in sequence
-    broker.execute_order.assert_has_calls([call(sig1), call(sig2)], any_order=False)
+def test_daily_loss_limit_breach():
+    """Test daily loss limit enforcement."""
+    broker = DummyBroker(initial_balance=50000.0)
+    broker.connect()
+    config = TradingConfig(daily_loss_limit=100.0)  # Low limit for testing
+    
+    coordinator = ExecutionCoordinator(broker, config)
+    coordinator.start_new_session()
+    
+    # Simulate a large loss by updating broker balance
+    broker._balance = 49900.0  # $100 loss
+    
+    # This should trigger the daily loss limit
+    coordinator._check_risk()
+    
+    assert coordinator.daily_locked

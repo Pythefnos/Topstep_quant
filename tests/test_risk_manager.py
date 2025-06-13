@@ -1,46 +1,92 @@
-# File: tests/unit/test_risk_manager.py
+"""Test risk management functionality."""
 
 import pytest
-from topstepquant.risk_manager import RiskManager
-from tests.conftest import TradeSignal
+from topstep_quant.risk.risk_manager import RiskManager
+from topstep_quant.risk.kill_switch import KillSwitch, RiskViolationError
 
-def test_allows_trade_within_limits():
-    """RiskManager should allow a trade that does not violate any risk limits."""
-    rm = RiskManager(max_daily_loss=1000, max_trade_size=5, max_open_positions=3)
-    rm.current_loss = 500      # current loss below daily limit
-    rm.current_open_positions = 1  # below max open positions
-    signal = TradeSignal("ES", "BUY", 1)  # quantity within max_trade_size
-    allowed = rm.validate_signal(signal)
-    assert allowed is True, "Trade within all limits should be allowed"
 
-def test_blocks_trade_exceeding_size_limit():
-    """RiskManager should block a trade that exceeds the maximum allowed trade size."""
-    rm = RiskManager(max_trade_size=5)
-    signal = TradeSignal("ES", "BUY", 10)  # quantity 10 > max_trade_size 5
-    allowed = rm.validate_signal(signal)
-    assert allowed is False, "Trade larger than max_trade_size should be blocked"
+def test_risk_manager_initialization():
+    """Test RiskManager initialization with default values."""
+    rm = RiskManager()
+    
+    assert rm._initial_balance == 50000.0
+    assert rm._daily_loss_limit == 1000.0
+    assert rm._trailing_drawdown == 2000.0
+    assert rm._high_balance == 50000.0
+    assert rm._trailing_threshold == 48000.0  # 50000 - 2000
 
-def test_blocks_trade_after_daily_loss_limit():
-    """RiskManager should block new trades once the daily loss limit is reached or exceeded."""
-    rm = RiskManager(max_daily_loss=100)
-    rm.current_loss = 100  # at daily loss limit
-    signal = TradeSignal("ES", "BUY", 1)
-    allowed = rm.validate_signal(signal)
-    assert allowed is False, "No trades should be allowed after reaching daily loss limit"
 
-def test_blocks_trade_when_max_open_reached():
-    """RiskManager should block a trade if the maximum number of open positions is reached."""
-    rm = RiskManager(max_open_positions=2)
-    rm.current_open_positions = 2  # at max allowed open positions
-    signal = TradeSignal("ES", "BUY", 1)
-    allowed = rm.validate_signal(signal)
-    assert allowed is False, "No new trade allowed when max open positions reached"
+def test_start_new_day():
+    """Test starting a new trading day."""
+    rm = RiskManager()
+    rm.start_new_day(51000.0)  # Start with profit from previous day
+    
+    assert rm._start_of_day_balance == 51000.0
 
-def test_allows_trade_when_below_risk_limits():
-    """RiskManager should allow trades when current risk exposure is below all limits."""
-    rm = RiskManager(max_daily_loss=500, max_trade_size=5, max_open_positions=3)
-    rm.current_loss = 0       # no loss so far
-    rm.current_open_positions = 0  # no open trades currently
-    signal = TradeSignal("ES", "BUY", 5)  # quantity equal to max_trade_size
-    allowed = rm.validate_signal(signal)
-    assert allowed is True, "Trade should be allowed when under all risk thresholds"
+
+def test_daily_loss_limit_check():
+    """Test daily loss limit enforcement."""
+    rm = RiskManager(daily_loss_limit=100.0)
+    rm.start_new_day(50000.0)
+    
+    # Test within limit
+    rm.check_limits(49950.0, 0.0)  # $50 loss, should be OK
+    
+    # Test at limit - should trigger kill switch
+    with pytest.raises(RiskViolationError):
+        rm.check_limits(49900.0, 0.0)  # $100 loss, should trigger
+
+
+def test_trailing_drawdown_check():
+    """Test trailing drawdown limit enforcement."""
+    rm = RiskManager(trailing_drawdown=100.0, initial_balance=1000.0)
+    rm.start_new_day(1000.0)
+    
+    # Test within limit
+    rm.check_limits(950.0, 0.0)  # $50 loss, should be OK (threshold is 900)
+    
+    # Test at limit - should trigger kill switch
+    with pytest.raises(RiskViolationError):
+        rm.check_limits(900.0, 0.0)  # At threshold, should trigger
+
+
+def test_end_of_day_new_high():
+    """Test end of day processing with new high balance."""
+    rm = RiskManager(initial_balance=50000.0, trailing_drawdown=2000.0)
+    rm.start_new_day(50000.0)
+    
+    # End day with profit
+    rm.end_of_day(52000.0)
+    
+    assert rm._high_balance == 52000.0
+    assert rm._trailing_threshold == 50000.0  # Should be capped at initial balance
+
+
+def test_kill_switch_functionality():
+    """Test kill switch activation and reset."""
+    kill_switch = KillSwitch()
+    
+    assert not kill_switch.triggered
+    assert kill_switch.reason == ""
+    
+    # Test activation
+    with pytest.raises(RiskViolationError):
+        kill_switch.activate("Test reason")
+    
+    assert kill_switch.triggered
+    assert kill_switch.reason == "Test reason"
+    
+    # Test reset
+    kill_switch.reset()
+    assert not kill_switch.triggered
+    assert kill_switch.reason == ""
+
+
+def test_risk_manager_with_unrealized_pnl():
+    """Test risk checks including unrealized P&L."""
+    rm = RiskManager(daily_loss_limit=100.0)
+    rm.start_new_day(50000.0)
+    
+    # Test with unrealized loss that pushes over limit
+    with pytest.raises(RiskViolationError):
+        rm.check_limits(49950.0, -60.0)  # $50 realized + $60 unrealized = $110 total loss

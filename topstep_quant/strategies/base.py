@@ -1,8 +1,9 @@
-# topstep_quant/strategies/base.py
+"""Base strategy class for TopstepQuant trading strategies."""
+
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime, time
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,7 @@ class StrategyBase(ABC):
         last_price (Optional[float]): Last seen market price (midpoint or last trade price).
     """
     def __init__(self, instrument: str, max_daily_loss: Optional[float] = None,
-                 flatten_time: time = time(15, 55)):
+                 flatten_time: time = time(15, 55)) -> None:
         """
         Initialize the strategy with instrument and risk parameters.
         
@@ -44,7 +45,7 @@ class StrategyBase(ABC):
         self.last_price: Optional[float] = None
         
         # Ensure instrument is a micro futures symbol if possible (Topstep constraint).
-        if isinstance(instrument, str) and instrument.startswith("M") is False:
+        if isinstance(instrument, str) and not instrument.startswith("M"):
             logger.warning("Instrument %s may not be a micro future (expected symbol starting with 'M').", instrument)
     
     @abstractmethod
@@ -73,7 +74,7 @@ class StrategyBase(ABC):
         raise NotImplementedError("on_trade() must be implemented by Strategy subclasses.")
     
     @abstractmethod
-    def generate_signal(self, market_data: Dict[str, Any]) -> list:
+    def generate_signal(self, market_data: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
         Generate trading signal(s) based on current market data.
         This could be in the form of target positions or specific orders to place.
